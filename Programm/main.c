@@ -1,3 +1,30 @@
+/******************************************************************************
+File:   main.c
+Ver     1.0
+Date:   July 29, 2018
+Autor:  Sivokon Dmitriy aka DiMoon Electronics
+*******************************************************************************
+BSD 2-Clause License
+Copyright (c) 2018, Sivokon Dmitriy
+All rights reserved.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+******************************************************************************/
 #include <stdint.h>
 #include <stdlib.h>
 #include "stm32f10x.h"
@@ -9,20 +36,20 @@
 #define NUM_ROW         10
 #define NUM_COLUM       8
 
-/// ���������� ����������
+/// Глобальные переменные
 
-//���������� RGB
+//Компоненты RGB
 uint8_t rc = 0;
 uint8_t gc = 0;
 uint8_t bc = 0;
 
   
-uint16_t dimmer_val; //�������� �������
-uint16_t mode_val; //�������� ������
+uint16_t dimmer_val; //Крутилка яркости
+uint16_t mode_val; //Крутилка режима
 
-uint8_t NumMode = 1; //����� ������
+uint8_t NumMode = 1; //Номер режима
 
-/// ���������� �����
+/// Глобальные флаги
 uint8_t flag_dispmode = 0;
 
 /******************************************************************************/
@@ -34,34 +61,34 @@ uint8_t flag_dispmode = 0;
 #define NUM_SOFT_TIMERS         3
 uint32_t soft_timer[NUM_SOFT_TIMERS];
 
-//������������� ������
+//Времязадающий таймер
 //TIM3
 void TickTimerInit(void)
 {
-  RCC->APB1ENR |= RCC_APB1ENR_TIM3EN; //�������� ������������ TIM3
+  RCC->APB1ENR |= RCC_APB1ENR_TIM3EN; //Включаем тактирование TIM3
   
-  TIM3->PSC = 71; //������������ 71+1=72
-  TIM3->ARR = 10000; //������ 10000���, ������� 100��
-  TIM3->DIER = TIM_DIER_UIE; //���������� �� ����������
+  TIM3->PSC = 71; //Предделитель 71+1=72
+  TIM3->ARR = 10000; //Период 10000мкс, частота 100Гц
+  TIM3->DIER = TIM_DIER_UIE; //Прерывание по обновлению
   
   for(int i=0; i<NUM_SOFT_TIMERS; i++)
   {
     soft_timer[i] = 0;
   }
   
-  TIM3->SR &= ~(TIM_SR_UIF); //������� ���� ����������
-  NVIC_EnableIRQ(TIM3_IRQn); //��������� ���������� �� �������
-  TIM3->CR1 |= TIM_CR1_CEN; //�������� ������
+  TIM3->SR &= ~(TIM_SR_UIF); //Очищаем флаг прерывания
+  NVIC_EnableIRQ(TIM3_IRQn); //Разрешаем прерывание от таймера
+  TIM3->CR1 |= TIM_CR1_CEN; //Включаем таймер
 }
 
 
 
-//���������� TIM3
-//���������� � �������� 100 ��
+//Прерывание TIM3
+//Вызывается с частотой 100 Гц
 void TIM3_IRQHandler(void)
 {
   static int i = 0;
-  TIM3->SR &= ~(TIM_SR_UIF); //������� ���� ����������
+  TIM3->SR &= ~(TIM_SR_UIF); //Очищаем флаг прерывания
   
   for(i=0; i<NUM_SOFT_TIMERS; i++)
     soft_timer[i]++;
@@ -103,7 +130,7 @@ void SetTimer(uint32_t val, int n)
 }
 
 /******************************************************************************/
-/********************** ����������� ������� ***********************************/
+/********************** Статические эффекты ***********************************/
 /******************************************************************************/
 
 
@@ -179,7 +206,7 @@ void While(uint16_t dv, uint16_t mv)
 }
 
 /******************************************************************************/
-/********************** ������������ ������� **********************************/
+/********************** Динамические эффекты **********************************/
 /******************************************************************************/
 
 void DynamicHelixRainbow(uint16_t dv, uint16_t mv)
@@ -295,12 +322,12 @@ void DynamicVRainbow(uint16_t dv, uint16_t mv)
 #define TRAIL_LEN       4
 typedef struct 
 {
-  int8_t coord;            //������� ���������� �����
-  int8_t vel;              //������������ �������� �����
-  int8_t counter;          //�������, ������������ ����������
-  uint16_t color;          //���� �����
-  uint8_t flag_inprogress; //1-� ��������, 0-���������
-  uint16_t post_delay;     //�������� ����� ���������� ����� �����
+  int8_t coord;            //текущая координата капли
+  int8_t vel;              //длительность стекания капли
+  int8_t counter;          //счетчик, используется алгоритмом
+  uint16_t color;          //цвет капли
+  uint8_t flag_inprogress; //1-в процессе, 0-завершено
+  uint16_t post_delay;     //задержка перед генерацией новой капли
 } drop;
 
 static drop drops[NUM_COLUM];
@@ -328,15 +355,15 @@ void DynamicRain(uint16_t dv, uint16_t mv)
   {
     rnd = (uint32_t)rand();
     
-    if(drops[i].flag_inprogress == 0) //���� ��� ��� �����
+    if(drops[i].flag_inprogress == 0) //Если тут нет капли
     {
-      //��������� �����
-      drops[i].coord = NUM_ROW-1; //�������� ������
-      drops[i].color = rnd%360; //������ ����
-      drops[i].vel = rnd%10; //������ ������ ��������
-      drops[i].counter = 0; //���������� �������
+      //Генерация капли
+      drops[i].coord = NUM_ROW-1; //Начинаем сверху
+      drops[i].color = rnd%360; //задаем цвет
+      drops[i].vel = rnd%10; //задаем период стекания
+      drops[i].counter = 0; //сбрасываем счетсик
       
-      //�������� ����� ���������� ��������� �����
+      //задержка перед генерацией следующей капли
       int16_t rnd_param = (3800-mv)/4;
       if(rnd_param < 0)
         drops[i].post_delay = 0;
@@ -345,14 +372,14 @@ void DynamicRain(uint16_t dv, uint16_t mv)
       
       
       drops[i].flag_inprogress = 1;
-      //��� ������� �������
+      //Тут очищаем колонку
       for(int j=0; j<NUM_ROW; j++)
       {
         ws2812b_set(i*NUM_ROW+j, 0, 0, 0);
       }
       
     }
-    else //����� ������� �� ���������
+    else //иначе выводим на индикатор
     {
       if(drops[i].coord >= -(TRAIL_LEN+1))
       {
@@ -364,7 +391,7 @@ void DynamicRain(uint16_t dv, uint16_t mv)
         {
           drops[i].counter = 0;        
           
-          if(drops[i].coord >= 0) //���� ����� �� ����� �� ������� ������
+          if(drops[i].coord >= 0) //Если капля не вышла за пределы экрана
           {
             int j;
             for(j=0; j<drops[i].coord; j++)
@@ -383,7 +410,7 @@ void DynamicRain(uint16_t dv, uint16_t mv)
                 L=0;
             }
           }
-          else //��� ������ ������ �����
+          else //тут рисуем только хвост
           {
             int j;
             uint8_t trail_residue = TRAIL_LEN+drops[i].coord+1;
@@ -496,13 +523,20 @@ void fsm_disp(void)
   switch(state)
   {
   case 0:
-    if(GetTimer(TIMER_FPS) >= 2)
+    //Обновляем светодиодную ленту с частотой 50 Гц
+    if(GetTimer(TIMER_FPS) >= 2) 
     {
       ResetTimer(TIMER_FPS);
-      ADC_AnalogRead(&dimmer_val, &mode_val);
-      Display();
+      ADC_AnalogRead(&dimmer_val, &mode_val); //читаем состояние крутилок
+      //dimmer_val и mode_val - глобальные переменные, хранящие 
+      //положение ручек яркости и настройки режима
+      
+      Display(); //обновляем ленту
     }
     
+    //Если от конечного автомата sfm_main()
+    //пришла команда об отображении номера режима,
+    //то переходим в соответствующее состояние
     if(flag_dispmode)
     {
       ResetTimer(TIMER_DISP);
@@ -512,6 +546,7 @@ void fsm_disp(void)
     break;
     
   case 1:
+    //обновляем "столбик" номера режима с частотой 50 Гц
     if(GetTimer(TIMER_FPS) >= 2)
     {
       ResetTimer(TIMER_FPS);
@@ -519,13 +554,19 @@ void fsm_disp(void)
       disp_mode();
     }
     
+    //Если пришло еще одно событие об отображении номера режима
     if(flag_dispmode)
     {
+      //сбрасываем тайсер времени отображения режима
       ResetTimer(TIMER_DISP);
       flag_dispmode = 0;
     }
     
-    if(GetTimer(TIMER_DISP) >= 100) //������ 1000��
+    //Если прошла секунда с момента последнего
+    //нажатия на кнопку, то 
+    //возвращаем все как было
+    //и переходим в состояние отображения заданного эффекта
+    if(GetTimer(TIMER_DISP) >= 100) //прошло 1000мс
     {
       while(!ws2812b_is_ready())
         ;
@@ -551,26 +592,39 @@ void sfm_main(void)
   switch(b_state)
   {
   case 0:
+    //если зарегистрировали нажатие на кнопку
     if(ButtonIsPress())
     {
       ResetTimer(TIMER_ANTIBOUNCE);
-      b_state = 1;
+      b_state = 1; //переходим в состояние 1
     }
     break;
     
   case 1:
+    //тут логика такая: если через 5 тиков таймера 
+    //кнопка все еще находится в нажатом состоянии,
+    //это означает, то нажате действительно было
+    //и это не случайный дребезг контактов, например,
+    //при отпускании кнопки
     if(GetTimer(TIMER_ANTIBOUNCE) >= 5)
     {
       if(ButtonIsPress())
       {
-        //������ �� ������
-        IncrMode();
-        flag_dispmode = 1;
-        b_state = 2;
+        //Если надатие было, то
+        IncrMode(); //увеличиваем номер режима на единицу
+        flag_dispmode = 1; //устанавливаем глобальный флаг
+        //flag_dispmode в единицу, который говорит другому конечному автомату, 
+        //что надо показать столбик, демонстрирующий номер режима
+        
+        b_state = 2; //Переходим в состояние отпускания кнопки
         ResetTimer(TIMER_ANTIBOUNCE);
       }
       else
       {
+        //если же через 5 тиков кнопка не нажата,
+        //то это был какой-то дребезг 
+        //и на него не надо обращать внимание.
+        //Возвращаемся в исходное состояние
         b_state = 0;
       }
     }
@@ -579,6 +633,12 @@ void sfm_main(void)
   case 2:
     if(GetTimer(TIMER_ANTIBOUNCE) >= 10)
     {
+      //делаем задержку на 10 тиков
+      //после этого проверяем, была ли отпущена кнопка.
+      //Если отпустили, то переходим в тсходное состояние.
+      //Скорее всего задержка в 10 тиков 
+      //тут особо и не нужна, осталось как рудимент 
+      //процесса разработки
       if(!ButtonIsPress())
       {
         b_state = 0;
@@ -609,72 +669,5 @@ void main(void)
     sfm_main();
     fsm_disp();
   }
-  
-  
-  for(;;)
-  {
-    ADC_AnalogRead(&dimmer_val, &mode_val);
-    switch(mode)
-    {
-    case 0:
-      SingleColor(dimmer_val, mode_val);
-      break;
-      
-    case 1:
-      VGrad(dimmer_val, mode_val);
-      break;
-      
-    case 2:
-      While(dimmer_val, mode_val);
-      break;
-      
-    case 3:
-      HRainbow(dimmer_val, mode_val);
-      break;
-      
-    case 4:
-      VRainbow(dimmer_val, mode_val);
-      break;
-      
-    case 5:
-      HelixRainbow(dimmer_val, mode_val);
-      break;
-      
-    default:
-      mode = 0;
-      break;
-    }
-    
-    
-    if(is_press == 0)
-    {
-      if(ButtonIsPress())
-      {
-        is_press = 1;
-        mode++;
-      }
-    }
-    else
-    {
-      if(!ButtonIsPress())
-      {
-        is_press = 0;
-      }
-    }
-      
-    ResetTimer(0);
-    while(!(GetTimer(0) >= 2))
-    {
-      asm("nop");
-    }
-    
-    /*
-    for(int k=0; k<100000; k++)
-      asm("nop");
-    */
-  }
-  
-#endif
 }
-
 
